@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: other-config
+  namespace: ns-b
+  labels:
+    color: yellow
+data:
+  region: eu-west-1
