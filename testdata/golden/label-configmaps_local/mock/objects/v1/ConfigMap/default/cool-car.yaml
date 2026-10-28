@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  model: Shelby Mustang
+kind: ConfigMap
+metadata:
+  name: cool-car
+  namespace: default

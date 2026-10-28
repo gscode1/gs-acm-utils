@@ -1,0 +1,1 @@
+mock data: key "nope" not found in objects/v1/ConfigMap/ns-a/my-config.yaml (data has: color, size)

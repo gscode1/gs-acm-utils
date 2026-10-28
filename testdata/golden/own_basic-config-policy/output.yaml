@@ -1,0 +1,18 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: claim-and-list
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        data:
+          clusterId: 7b1c0f4e-8f1d-4f0a-9a57-000000000001
+          regions: eu-west-1
+        kind: ConfigMap
+        metadata:
+          name: claim
+          namespace: ns-a
+  remediationAction: inform
+  severity: low

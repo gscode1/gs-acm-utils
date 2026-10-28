@@ -1,0 +1,11 @@
+object-templates:
+  - complianceType: musthave
+    objectDefinition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        labels:
+          ford.com/model: Mustang
+          name: my-obj-name
+        name: cool-car
+        namespace: default

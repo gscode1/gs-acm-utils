@@ -1,0 +1,30 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-basic
+  namespace: policies
+spec:
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: basic-config
+        spec:
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                data:
+                  cluster: local-cluster
+                  color: blue
+                  password: s3cr3t-plaintext
+                  size: "3"
+                kind: ConfigMap
+                metadata:
+                  name: app-config
+                  namespace: ns-a
+          remediationAction: inform
+          severity: low
+  remediationAction: inform

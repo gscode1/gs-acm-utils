@@ -1,0 +1,17 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: secret-roundtrip
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        data:
+          decoded: s3cr3t
+          raw: czNjcjN0
+          region: eu-west-1
+        kind: ConfigMap
+        metadata:
+          name: x
+  remediationAction: inform

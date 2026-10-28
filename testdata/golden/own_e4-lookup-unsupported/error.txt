@@ -1,0 +1,1 @@
+mock data: lookup not supported for apiVersion=apps/v1, Kind=Deployment (no files under objects/apps/v1/Deployment/)
