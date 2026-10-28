@@ -1,0 +1,8 @@
+gs-acm-utils
+Copyright 2026 gscode1
+
+This product includes software developed by the Open Cluster Management /
+stolostron community: github.com/stolostron/go-template-utils
+(Apache License 2.0). It is used as a library dependency, and portions of
+cmd/template-resolver (policy-walking logic) may be adapted in this
+repository with attribution in the corresponding source file headers.
