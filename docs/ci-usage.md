@@ -1,10 +1,11 @@
 # Using acm-mock-resolver in CI
 
 This page is for **teams that consume** the tool (policy repositories). This repository itself has no
-CI; see `CLAUDE.md`.
+CI service; its checks run locally (see the README).
 
 `acm-mock-resolver validate` needs no kubeconfig, no network and no credentials, so it runs anywhere
-a binary runs. Install it as described in the README (release tarball or `go install`).
+a binary runs. Install it as described in the README (release tarball, `go install` or build from source).
+No token or authentication is needed.
 
 ## Basic gate
 
@@ -71,11 +72,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          gh release download v0.1.0 --repo gscode1/gs-acm-utils \
-            --pattern 'acm-mock-resolver_v0.1.0_linux_amd64.tar.gz'
+          curl -fsSLO https://github.com/gscode1/gs-acm-utils/releases/download/v0.1.0/acm-mock-resolver_v0.1.0_linux_amd64.tar.gz
           tar -xzf acm-mock-resolver_*.tar.gz --strip-components=1 --wildcards '*/acm-mock-resolver'
-        env:
-          GH_TOKEN: ${{ secrets.GS_ACM_UTILS_TOKEN }}   # the repository is private
       - run: ./acm-mock-resolver validate --mock-data-dir cohorts/${{ matrix.cohort }} policies/
 ```
 
