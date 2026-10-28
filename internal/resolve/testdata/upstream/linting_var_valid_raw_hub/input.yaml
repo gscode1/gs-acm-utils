@@ -1,0 +1,37 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: cross-objdef-invalid-test
+spec:
+  remediationAction: enforce
+  severity: low
+  object-templates-raw: |
+    - complianceType: musthave
+      objectDefinition:
+        kind: ConfigMap
+        apiVersion: v1
+        metadata:
+          name: first-map
+          labels:
+            # Define variables but don't use them in this objectDefinition
+            managed-var: '{{ $managedVar := "managed-value" }}something'
+            hub-var: '{{hub $hubVar := "hub-value" hub}}something'
+    - complianceType: musthave
+      objectDefinition:
+        kind: ConfigMap
+        apiVersion: v1
+        metadata:
+          name: second-map
+          labels:
+            # These variables are reachable here in object-templates-raw
+            hub-value: '{{hub $hubVar hub}}'
+            managed-value: '{{ $managedVar }}'
+    - complianceType: musthave
+      objectDefinition:
+        kind: ConfigMap
+        apiVersion: v1
+        metadata:
+          name: conditional-reassign-map
+          labels:
+            # Declared, reassigned with = inside if, then used (ACM-33627)
+            model: '{{ $model := "Pinto" }}{{ if eq (fromConfigMap "default" "cool-car" "model") "Shelby Mustang" }}{{ $model = "Shelby Mustang" }}{{ end }}{{ $model }}'

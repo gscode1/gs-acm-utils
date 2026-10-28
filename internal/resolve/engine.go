@@ -6,6 +6,7 @@ package resolve
 import (
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -44,6 +45,9 @@ type Options struct {
 	Disabled []string
 	// Cohort is the cohort directory, used only in error messages (E12).
 	Cohort string
+	// Warn receives non-fatal warnings (the --hub-mode=passthrough stub warning).
+	// Nil discards them; the CLI passes stderr.
+	Warn io.Writer
 }
 
 // PassOptions are the per-call, per-pass knobs that feed a fresh
@@ -55,6 +59,10 @@ type PassOptions struct {
 	ClusterScopedAllowList []templates.ClusterScopedObjectIdentifier
 	// InputIsYAML marks the input as raw YAML instead of JSON.
 	InputIsYAML bool
+	// CustomFunctions are extra template functions for this one call (for
+	// example skipObject). They are copied into the fresh options and override
+	// the engine's functions of the same name.
+	CustomFunctions map[string]any
 }
 
 type clients struct {
@@ -70,6 +78,10 @@ type Engine struct {
 	disabled []string
 	managed  clients
 	hub      *clients // nil when the cohort has no hub/objects
+
+	// params and hubContext are the cohort's params.yaml and hub/context.yaml.
+	params     map[string]any
+	hubContext map[string]any
 }
 
 // NewEngine builds the fake clients for the managed view and, when the cohort
@@ -87,7 +99,7 @@ func NewEngine(set *mockdata.Set, opts Options) (*Engine, error) {
 		}
 	}
 
-	e := &Engine{opts: opts, disabled: disabled}
+	e := &Engine{opts: opts, disabled: disabled, params: set.Params, hubContext: set.HubContext}
 
 	dyn, disc, err := fakecluster.New(set.Managed)
 	if err != nil {
@@ -141,6 +153,10 @@ func (e *Engine) resolveOptions(pass Pass, po PassOptions) *templates.ResolveOpt
 		opts.CustomFunctions["fromConfigMap"] = s.fromConfigMap
 		opts.CustomFunctions["fromSecret"] = s.fromSecret
 		opts.CustomFunctions["lookup"] = s.lookup
+	}
+
+	for name, fn := range po.CustomFunctions {
+		opts.CustomFunctions[name] = fn
 	}
 
 	return opts
