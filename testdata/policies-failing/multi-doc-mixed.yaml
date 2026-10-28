@@ -1,0 +1,31 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: good
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: x
+          namespace: ns-a
+        data:
+          color: '{{ fromConfigMap "ns-a" "my-config" "color" }}'
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: bad
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: x
+          namespace: ns-a
+        data:
+          value: '{{ fromConfigMap "ns-missing" "cm" "k" }}'

@@ -413,7 +413,7 @@ func TestHubNamespaceRules(t *testing.T) {
 
 	t.Run("non-Policy kinds always need the argument", func(t *testing.T) {
 		_, err := e.ResolveDocument([]byte(hubCP), DocOptions{})
-		want := "a hub namespace must be provided when a hub kubeconfig is provided " +
+		want := "a hub namespace must be provided (--hub-namespace) when resolving hub templates " +
 			"and spec.hubTemplateOptions.serviceAccountName is not specified"
 
 		if err == nil || err.Error() != want {
