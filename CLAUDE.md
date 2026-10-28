@@ -23,3 +23,7 @@ Everything lives under `internal/` (no public API in MVP).
 - Never reuse/mutate a `templates.ResolveOptions` across calls (ResolveTemplate appends to it); build a fresh one per call.
 - Template strings in YAML fixtures are single-quoted: `'{{ ... }}'`.
 - Commit messages end with the Co-Authored-By trailer; PR bodies end with the Claude Code line.
+
+## No CI
+There is no GitHub Actions workflow. Tests and lint run locally via make; `make build test lint`
+must be green before every merge (branch + PR + squash-merge, no waiting on checks).
