@@ -1,0 +1,34 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: cross-objdef-invalid-test
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          labels:
+            hub-var: something
+            managed-var: something
+          name: first-map
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          labels:
+            hub-value: hub-value
+            managed-value: managed-value
+          name: second-map
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          labels:
+            model: Shelby Mustang
+          name: conditional-reassign-map
+  remediationAction: enforce
+  severity: low

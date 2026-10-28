@@ -73,7 +73,7 @@ func (s *strictFuncs) fromObject(fn, kind, namespace, name, key string) (string,
 		return "", fmt.Errorf("failed getting the %s %s from %s: %w", kind, name, namespace, err)
 	}
 
-	obj, err := s.ix.Get("v1", kind, ns, name)
+	obj, err := s.get("v1", kind, ns, name)
 	if err != nil {
 		return "", mockdata.WithReference(err, reference(fn, namespace, name, key))
 	}
@@ -108,6 +108,43 @@ func (s *strictFuncs) scope(apiVersion, kind string) (namespaced, known bool) {
 	}
 
 	return false, false
+}
+
+// get is Index.Get with one refinement: a Kind that the fake cluster always
+// advertises (ConfigMap, Secret, Namespace, Node, ManagedCluster, ClusterClaim)
+// is supported even when it has zero files, so an absent object is E1 (namespaced
+// Kinds: the namespace directory is missing) or E2 (cluster-scoped Kinds), not E4.
+func (s *strictFuncs) get(apiVersion, kind, ns, name string) (*unstructured.Unstructured, error) {
+	obj, err := s.ix.Get(apiVersion, kind, ns, name)
+	if err == nil {
+		return obj, nil
+	}
+
+	var e4 *mockdata.ErrLookupUnsupported
+	if !errors.As(err, &e4) {
+		return nil, err
+	}
+
+	gv, perr := schema.ParseGroupVersion(apiVersion)
+	if perr != nil {
+		return nil, err
+	}
+
+	for _, k := range fakecluster.AlwaysAdvertised() {
+		if k.GVK.GroupVersion() != gv || k.GVK.Kind != kind {
+			continue
+		}
+
+		dir := e4.Dir
+
+		if k.Namespaced {
+			return nil, &mockdata.ErrNamespaceDirMissing{Dir: dir + ns + "/"}
+		}
+
+		return nil, &mockdata.ErrObjectMissing{Path: dir + name + ".yaml"}
+	}
+
+	return nil, err
 }
 
 func (s *strictFuncs) onAllowList(group, kind, name string) bool {
@@ -174,7 +211,7 @@ func (s *strictFuncs) lookup(
 	}
 
 	if name != "" {
-		obj, err := s.ix.Get(apiVersion, kind, ns, name)
+		obj, err := s.get(apiVersion, kind, ns, name)
 		if err != nil {
 			if syn := s.synthesizedNamespace(apiVersion, kind, name); syn != nil {
 				return syn.UnstructuredContent(), nil

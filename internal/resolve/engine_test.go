@@ -232,9 +232,9 @@ func TestStrictCatalogMessages(t *testing.T) {
 			func(err error) bool { var t *mockdata.ErrLookupUnsupported; return errors.As(err, &t) },
 		},
 		{
-			"E4 advertised kind without files", `(lookup "v1" "Node" "" "n1").metadata`,
-			`mock data: lookup not supported for apiVersion=v1, Kind=Node (no files under objects/v1/Node/)`,
-			func(err error) bool { var t *mockdata.ErrLookupUnsupported; return errors.As(err, &t) },
+			"E2 advertised cluster-scoped kind without files", `(lookup "v1" "Node" "" "n1").metadata`,
+			`mock data: object not found: objects/v1/Node/n1.yaml (referenced by lookup "v1" "Node" "" "n1")`,
+			func(err error) bool { var t *mockdata.ErrObjectMissing; return errors.As(err, &t) },
 		},
 	}
 
