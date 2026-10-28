@@ -3,15 +3,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/gscode1/gs-acm-utils/internal/cli"
 )
 
 func main() {
-	if err := cli.NewRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
-	}
+	os.Exit(cli.Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }

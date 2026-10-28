@@ -96,7 +96,7 @@ func (e *Engine) hubPass(s *Session, policy *unstructured.Unstructured, o *DocOp
 			}
 		} else if hubNamespace == "" {
 			// Non-Policy types just always require the argument
-			return nil, errors.New("a hub namespace must be provided when a hub kubeconfig is provided " +
+			return nil, errors.New("a hub namespace must be provided (--hub-namespace) when resolving hub templates " +
 				"and spec.hubTemplateOptions.serviceAccountName is not specified")
 		}
 	}

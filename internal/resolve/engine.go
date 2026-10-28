@@ -150,9 +150,18 @@ func (e *Engine) resolveOptions(pass Pass, po PassOptions) *templates.ResolveOpt
 
 	if e.opts.Strict {
 		s := &strictFuncs{ix: cl.ix, lookupNamespace: po.LookupNamespace, allowList: opts.ClusterScopedAllowList}
-		opts.CustomFunctions["fromConfigMap"] = s.fromConfigMap
-		opts.CustomFunctions["fromSecret"] = s.fromSecret
-		opts.CustomFunctions["lookup"] = s.lookup
+
+		// A function the user disabled must stay disabled: custom functions
+		// would otherwise re-add it.
+		for name, fn := range map[string]any{
+			"fromConfigMap": s.fromConfigMap,
+			"fromSecret":    s.fromSecret,
+			"lookup":        s.lookup,
+		} {
+			if !slices.Contains(e.disabled, name) {
+				opts.CustomFunctions[name] = fn
+			}
+		}
 	}
 
 	for name, fn := range po.CustomFunctions {

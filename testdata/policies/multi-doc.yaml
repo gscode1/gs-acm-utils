@@ -1,0 +1,35 @@
+---
+# first document
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: multi-one
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: one
+          namespace: ns-a
+        data:
+          color: '{{ fromConfigMap "ns-a" "my-config" "color" }}'
+---
+# only a comment in this document
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: multi-two
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: two
+          namespace: ns-b
+        data:
+          region: '{{ fromConfigMap "ns-b" "other-config" "region" }}'
