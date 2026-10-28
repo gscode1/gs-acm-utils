@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hub-config
+  namespace: policies
+data:
+  logLevel: debug

@@ -1,0 +1,6 @@
+apiVersion: cluster.open-cluster-management.io/v1alpha1
+kind: ClusterClaim
+metadata:
+  name: id.k8s.io
+spec:
+  value: 7b1c0f4e-8f1d-4f0a-9a57-000000000001
