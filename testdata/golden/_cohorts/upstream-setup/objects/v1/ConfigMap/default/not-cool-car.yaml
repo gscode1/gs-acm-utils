@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  model: Pinto
+kind: ConfigMap
+metadata:
+  name: not-cool-car
+  namespace: default

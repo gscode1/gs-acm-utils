@@ -1,0 +1,15 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: e2
+spec:
+  remediationAction: inform
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: x
+          labels:
+            v: '{{ fromConfigMap "default" "no-such-map" "model" }}'

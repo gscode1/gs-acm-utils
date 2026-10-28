@@ -1,0 +1,1 @@
+mock data: namespace directory missing: objects/v1/ConfigMap/no-such-ns/ (referenced by fromConfigMap "no-such-ns" "cool-car" "model")

@@ -355,3 +355,18 @@ func TestExitCodeMapping(t *testing.T) {
 		t.Fatal("mapping")
 	}
 }
+
+// Definition of done (plan section 10): validating the example policies against
+// the basic cohort needs no kubeconfig and no network.
+func TestDoDValidateWithoutKubeconfig(t *testing.T) {
+	t.Setenv("KUBECONFIG", "/nonexistent")
+	t.Setenv("HOME", t.TempDir())
+
+	code, out, errs := run(t, "", "validate", "--mock-data-dir", basic, policies+"/")
+	wantCode(t, code, ExitOK, errs)
+	contains(t, "stdout", out, "0 failed")
+
+	if errs != "" {
+		t.Fatalf("unexpected stderr:\n%s", errs)
+	}
+}

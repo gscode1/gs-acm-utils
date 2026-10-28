@@ -1,0 +1,1 @@
+template: tmpl:10: bad character U+0024 '$'

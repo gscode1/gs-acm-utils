@@ -27,3 +27,10 @@ Everything lives under `internal/` (no public API in MVP).
 ## No CI
 There is no GitHub Actions workflow. Tests and lint run locally via make; `make build test lint`
 must be green before every merge (branch + PR + squash-merge, no waiting on checks).
+
+## Docs and test data
+- `docs/`: mock-data contract, CI usage (for consumers), performance, upstream sync, spike notes.
+- `testdata/golden/`: upstream-ported regression corpus, run by `TestGolden` (`-update` regenerates).
+  `hack/fixture2cohort` converts resource YAML into cohort trees.
+- `internal/spike` is kept as a library-contract test (run it first when bumping go-template-utils).
+- Release is local: tag, `make release`, `gh release create`.

@@ -1,0 +1,30 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-basic
+  namespace: policies
+spec:
+  remediationAction: inform
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: basic-config
+        spec:
+          remediationAction: inform
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: ConfigMap
+                metadata:
+                  name: app-config
+                  namespace: ns-a
+                data:
+                  color: '{{ fromConfigMap "ns-a" "my-config" "color" }}'
+                  password: '{{ fromSecret "ns-a" "db-creds" "password" | base64dec }}'
+                  size: '{{ (lookup "v1" "ConfigMap" "ns-a" "my-config").data.size }}'
+                  cluster: '{{hub .ManagedClusterName hub}}'

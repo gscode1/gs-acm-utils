@@ -1,0 +1,17 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: secret-roundtrip
+spec:
+  remediationAction: inform
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: x
+        data:
+          raw: '{{ fromSecret "default" "creds" "password" }}'
+          decoded: '{{ fromSecret "default" "creds" "password" | base64dec }}'
+          region: '{{ fromConfigMap "default" "settings" "region" }}'

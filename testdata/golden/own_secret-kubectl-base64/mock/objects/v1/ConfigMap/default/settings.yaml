@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  region: eu-west-1
+kind: ConfigMap
+metadata:
+  name: settings
+  namespace: default

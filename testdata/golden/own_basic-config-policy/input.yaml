@@ -1,0 +1,18 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: claim-and-list
+spec:
+  remediationAction: inform
+  severity: low
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: claim
+          namespace: ns-a
+        data:
+          clusterId: '{{ fromClusterClaim "id.k8s.io" }}'
+          regions: '{{ range (lookup "v1" "ConfigMap" "ns-b" "").items }}{{ .data.region }}{{ end }}'

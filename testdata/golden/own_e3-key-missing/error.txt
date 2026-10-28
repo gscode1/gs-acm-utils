@@ -1,0 +1,1 @@
+mock data: key "no-such-key" not found in objects/v1/ConfigMap/default/cool-car.yaml (data has: model)
