@@ -195,6 +195,9 @@ Any non-zero exit fails the job. A matrix over cohorts, GitLab CI and shell exam
 - `--params` and `params.yaml` keys must be exported identifiers (start with an uppercase letter, e.g. `Env`).
 - Strict `lookup`: with a name, a missing object is an error; a list or label-selector lookup that
   matches nothing returns an empty list and is not an error.
+- `ConfigurationPolicy` with annotation `policy.open-cluster-management.io/disable-templates: "true"` is
+  returned unchanged (managed `{{ }}` kept literal, as the config-policy controller does); hub
+  templates in it are still resolved. See `docs/mock-data-contract.md`.
 
 ## Development
 

@@ -29,6 +29,17 @@ import (
 	"github.com/gscode1/gs-acm-utils/internal/mockdata"
 )
 
+// disableTemplatesAnnotation, set to exactly "true" on a ConfigurationPolicy,
+// makes the config-policy controller skip managed-cluster template evaluation
+// for it. Hub templates are not affected: the hub propagator resolves them.
+const disableTemplatesAnnotation = "policy.open-cluster-management.io/disable-templates"
+
+// templatesDisabled reports whether obj carries the disable-templates annotation
+// with the exact value "true" (any other value keeps templates enabled).
+func templatesDisabled(obj *unstructured.Unstructured) bool {
+	return obj.GetAnnotations()[disableTemplatesAnnotation] == "true"
+}
+
 // walker resolves the managed-cluster templates of one document.
 type walker struct {
 	s   *Session
@@ -108,7 +119,7 @@ func (w *walker) processPolicyTemplate(policy *unstructured.Unstructured) error 
 
 		switch templateObj.GetAPIVersion() {
 		case "policy.open-cluster-management.io/v1":
-			if templateObj.GetKind() != "ConfigurationPolicy" {
+			if templateObj.GetKind() != "ConfigurationPolicy" || templatesDisabled(&templateObj) {
 				continue
 			}
 
@@ -149,6 +160,10 @@ func (w *walker) processPolicyTemplate(policy *unstructured.Unstructured) error 
 
 // processConfigPolicyTemplate resolves a bare ConfigurationPolicy.
 func (w *walker) processConfigPolicyTemplate(policy *unstructured.Unstructured) error {
+	if templatesDisabled(policy) {
+		return nil
+	}
+
 	resolvedPolicy, err := w.processObjectTemplates(policy.Object)
 	if err != nil {
 		return err

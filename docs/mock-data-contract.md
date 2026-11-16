@@ -134,6 +134,16 @@ live-cluster behaviour.
 
 Strict functions honour `LookupNamespace` in the hub pass exactly like the library.
 
+### Disabling managed templates
+
+A `ConfigurationPolicy` annotated `policy.open-cluster-management.io/disable-templates: "true"`
+(`metadata.annotations`) is not evaluated by the config-policy controller, so `{{ ... }}` in it is literal
+(for example a `go-template` argument inside a `script`). The tool mirrors that, standalone or nested in a
+`Policy`'s `spec.policy-templates[].objectDefinition`: the object is returned unchanged, with no managed
+template evaluation and no strict mock-data lookups. Only the exact string `"true"` counts (`"True"`,
+`"yes"`, `"false"` or a missing annotation evaluate as usual). Hub templates (`{{hub ... hub}}`) are
+still resolved, as the hub propagator does that regardless of the annotation.
+
 ## 5. Template context
 
 | Key | Pass | Source |
