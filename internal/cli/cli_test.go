@@ -370,3 +370,41 @@ func TestDoDValidateWithoutKubeconfig(t *testing.T) {
 		t.Fatalf("unexpected stderr:\n%s", errs)
 	}
 }
+
+func TestResolveVersion(t *testing.T) {
+	for _, tc := range []struct{ name, ldflags, mod, want string }{
+		{"ldflags win over module version", "v1.2.3", "v9.9.9", "v1.2.3"},
+		{"module version used for go install", "dev", "v0.3.0", "v0.3.0"},
+		{"pseudo-version used", "dev", "v0.3.1-0.20260101000000-abcdef123456", "v0.3.1-0.20260101000000-abcdef123456"},
+		{"(devel) ignored", "dev", "(devel)", "dev"},
+		{"empty module version ignored", "dev", "", "dev"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := resolveVersion(tc.ldflags, tc.mod); got != tc.want {
+				t.Fatalf("resolveVersion(%q, %q) = %q, want %q", tc.ldflags, tc.mod, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEmptyMockDataFlagsAreUsageErrors(t *testing.T) {
+	policy := policies + "/policy-basic.yaml"
+
+	for _, tc := range []struct {
+		flag string
+		args []string
+	}{
+		{"--mock-data-file", []string{"resolve", policy}},
+		{"--mock-data-dir", []string{"resolve", policy}},
+		{"--mock-data-file", []string{"validate", policies}},
+		{"--mock-data-dir", []string{"validate", policies}},
+		{"--mock-data-file", []string{"mockdata", "check"}},
+		{"--mock-data-dir", []string{"mockdata", "check"}},
+	} {
+		args := append(append([]string{}, tc.args...), tc.flag, "")
+
+		code, _, errs := run(t, "", args...)
+		wantCode(t, code, ExitUsage, errs)
+		contains(t, "stderr", errs, tc.flag+" must not be empty")
+	}
+}

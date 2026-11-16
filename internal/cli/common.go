@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"unicode"
 
 	"github.com/spf13/cobra"
 	k8syaml "sigs.k8s.io/yaml"
@@ -55,6 +54,22 @@ const mockDataFileHelp = "consolidated mock-data file (YAML/JSON, one resolver c
 func markMockDataFlags(cmd *cobra.Command) {
 	cmd.MarkFlagsOneRequired("mock-data-dir", "mock-data-file")
 	cmd.MarkFlagsMutuallyExclusive("mock-data-dir", "mock-data-file")
+
+	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error { return checkMockDataFlagsNotEmpty(cmd) }
+}
+
+// checkMockDataFlagsNotEmpty rejects a mock-data flag that was set explicitly
+// to the empty string (for example from an unset shell variable), which would
+// otherwise be indistinguishable from the flag being absent.
+func checkMockDataFlagsNotEmpty(cmd *cobra.Command) error {
+	for _, name := range []string{"mock-data-dir", "mock-data-file"} {
+		fl := cmd.Flags().Lookup(name)
+		if fl != nil && fl.Changed && fl.Value.String() == "" {
+			return usagef("--%s must not be empty", name)
+		}
+	}
+
+	return nil
 }
 
 // loadMockData loads the directory or the file, whichever flag was given, and
@@ -109,8 +124,8 @@ func readParams(path string) (map[string]any, error) {
 	}
 
 	for k := range params {
-		if r := []rune(k); len(r) == 0 || !unicode.IsUpper(r[0]) {
-			return nil, usagef("--params file %s: key %q must be an exported identifier (start with an uppercase letter)", path, k)
+		if err := mockdata.CheckParamKey(k); err != nil {
+			return nil, usagef("--params file %s: %v", path, err)
 		}
 	}
 

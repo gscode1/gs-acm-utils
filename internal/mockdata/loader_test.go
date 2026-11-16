@@ -159,7 +159,7 @@ func TestE15EmptyCohort(t *testing.T) {
 
 	for name, setup := range tests {
 		t.Run(name, func(t *testing.T) {
-			root := write(t, map[string]string{"params.yaml": "a: b\n"})
+			root := write(t, map[string]string{"params.yaml": "A: b\n"})
 			setup(root)
 
 			le := loadErr(t, root)
@@ -310,12 +310,12 @@ func TestJSONYMLAndClusterScopedLayout(t *testing.T) {
 func TestParamsAndHubContext(t *testing.T) {
 	root := write(t, map[string]string{
 		"objects/v1/ConfigMap/ns-a/a.yaml": cm("a", "ns-a"),
-		"params.yaml":                      "env: prod\nreplicas: 3\nnested:\n  k: v\n",
+		"params.yaml":                      "Env: prod\nReplicas: 3\nNested:\n  k: v\n",
 		"hub/context.yaml":                 "clusterName: local-cluster\n",
 	})
 	set := mustLoad(t, root)
 
-	if set.Params["env"] != "prod" || set.Params["replicas"] != int64(3) {
+	if set.Params["Env"] != "prod" || set.Params["Replicas"] != int64(3) {
 		t.Errorf("params: %#v", set.Params)
 	}
 

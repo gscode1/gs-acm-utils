@@ -101,6 +101,10 @@ func Load(root string) (*Set, error) {
 
 	set.Params = l.loadMap("params.yaml")
 
+	for _, reason := range paramKeyProblems(set.Params) {
+		l.errs = append(l.errs, &ErrInvalidFile{Path: "params.yaml", Reason: reason})
+	}
+
 	if _, statErr := os.Stat(filepath.Join(l.root, "hub")); statErr == nil {
 		set.HubContext = l.loadMap("hub/context.yaml")
 	}
@@ -369,6 +373,10 @@ func (l *loader) parseFile(abs, rel, display string) (*parsedFile, error) {
 
 	u := &unstructured.Unstructured{Object: m}
 
+	if reason := identityProblem(u); reason != "" {
+		return nil, invalid(reason)
+	}
+
 	bodyAV, bodyKind, bodyName, bodyNS, missing := requiredFields(u)
 	if missing != "" {
 		return nil, &ErrMissingName{Path: display, Field: missing}
@@ -392,6 +400,10 @@ func (l *loader) parseFile(abs, rel, display string) (*parsedFile, error) {
 		}
 
 		return nil, &ErrPathMismatch{Path: display, Field: f.name, BodyValue: f.body, PathValue: f.dir}
+	}
+
+	if reason := unknownFieldProblem(apiVersion, kind, m); reason != "" {
+		return nil, invalid(reason)
 	}
 
 	if namespaced {

@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          curl -fsSLO https://github.com/gscode1/gs-acm-utils/releases/download/v0.2.0/acm-mock-resolver_v0.2.0_linux_amd64.tar.gz
+          curl -fsSLO https://github.com/gscode1/gs-acm-utils/releases/download/v0.3.0/acm-mock-resolver_v0.3.0_linux_amd64.tar.gz
           tar -xzf acm-mock-resolver_*.tar.gz --strip-components=1 --wildcards '*/acm-mock-resolver'
       - run: ./acm-mock-resolver validate --mock-data-dir cohorts/${{ matrix.cohort }} policies/
 ```

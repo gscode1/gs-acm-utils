@@ -61,7 +61,8 @@ rejected (exit code 2). **All** problems are collected and printed together, not
 
 1. The file parses as YAML (`.yaml`, `.yml`) or JSON (`.json`), parsed with `sigs.k8s.io/yaml`, and holds
    exactly one object.
-2. `apiVersion`, `kind` and `metadata.name` are present.
+2. `apiVersion`, `kind` and `metadata.name` are present. `metadata.name` and `metadata.namespace` must be
+   strings (see the YAML tip below).
 3. Path and body agree: the `apiVersion` path, the `Kind` directory, the namespace directory (or its
    absence for cluster-scoped Kinds) and the file name stem equal `apiVersion`, `kind`,
    `metadata.namespace` and `metadata.name`.
@@ -78,6 +79,16 @@ rejected (exit code 2). **All** problems are collected and printed together, not
    other file extensions.
 7. `objects/` exists and contains at least one file.
 8. Secrets obey the encoding rules of section 3.
+9. Objects of three well-known kinds may only have their standard top-level fields, so a typo such as
+   `dta:` is an error instead of being silently ignored: `v1/ConfigMap` allows `apiVersion`, `kind`,
+   `metadata`, `data`, `binaryData`, `immutable`; `v1/Secret` allows `apiVersion`, `kind`, `metadata`,
+   `data`, `stringData`, `type`, `immutable`; `v1/Namespace` allows `apiVersion`, `kind`, `metadata`,
+   `spec`, `status`. Every other kind is free-form.
+10. Keys of `params.yaml` start with an uppercase letter (they become `.Key` in templates).
+
+**YAML tip:** YAML 1.1 reads unquoted `no`, `yes`, `on`, `off` and plain numbers as booleans and numbers, not
+strings. Quote such values: `namespace: "no"`, `name: "123"`. An unquoted one fails with
+`metadata.namespace must be a string, got bool false; quote the value`.
 
 ## 3. Secrets
 
@@ -157,7 +168,8 @@ still resolved, as the hub propagator does that regardless of the annotation.
 | `.PolicyMetadata` | hub | derived from the input Policy (`name`, `namespace`, `labels`, `annotations`), as upstream; only set when the input kind is `Policy` |
 | extra keys, e.g. `.Env` | both | `params.yaml` in the cohort, overridden by `--params FILE`; flag values win over file values |
 
-Extra keys must be exported identifiers (start with an uppercase letter). The hub pass additionally
+Extra keys must be exported identifiers (start with an uppercase letter); keys of `params.yaml` and
+`spec.params` are checked at load time (exit 2), keys of `--params FILE` when the flag is read (exit 3). The hub pass additionally
 needs a hub namespace: the Policy's `metadata.namespace`, or `--hub-namespace` (they must match if both
 are given), or `spec.hubTemplateOptions.serviceAccountName`.
 
@@ -174,7 +186,9 @@ The text below is what the tool prints.
 
 **E5 missing identity field**
 `mock data: file objects/v1/ConfigMap/ns-a/my-config.yaml: missing metadata.name`
-(also `missing apiVersion`, `missing kind`). *Fix:* add the field to the file body.
+(also `missing apiVersion`, `missing kind`). *Fix:* add the field to the file body. A `metadata.name` or
+`metadata.namespace` that is present but not a string (`namespace: no`, `name: 123`) is reported as
+`metadata.namespace must be a string, got bool false; quote the value`; quote the value.
 
 **E6 path and body disagree**
 `mock data: file objects/v1/ConfigMap/ns-a/my-config.yaml: metadata.name is "other-name" but directory says "my-config"`
@@ -194,7 +208,8 @@ For a custom Kind, make all its files use the same layout.
 
 **E9 invalid file**
 `mock data: file objects/v1/ConfigMap/ns-a/my-config.yaml: parse error: yaml: line 3: did not find expected ',' or ']'`
-Other reasons: `dotfile`, `broken symlink`, `symlink escapes root`, `symlink to directory is not supported`,
+Other reasons: `unknown field "dta" for v1 ConfigMap (allowed: ...)` (a misspelled top-level field of a
+ConfigMap, Secret or Namespace), `params key "env" must be an exported identifier ...` (in `params.yaml`), `dotfile`, `broken symlink`, `symlink escapes root`, `symlink to directory is not supported`,
 `unsupported extension`, `not a regular file`. *Fix:* repair or remove the file; keep notes in a
 `README.md` outside the cohort (a `.md` inside it is an unsupported extension).
 
@@ -263,7 +278,7 @@ line break, or quote the template or give it a default (`| default "7d"`).
 
 `--mock-data-file FILE` loads one YAML or JSON document holding one resolver context. It produces the same
 mock data as the equivalent cohort directory; the directory format is unchanged. Pass exactly one of
-`--mock-data-dir` and `--mock-data-file` (a usage error, exit 3, otherwise). The conventional file name is
+`--mock-data-dir` and `--mock-data-file`, and not as an empty string (a usage error, exit 3, otherwise). The conventional file name is
 `fixture.yaml`; any path is accepted. `testdata/fixtures/basic.yaml` is the file form of
 `testdata/cohorts/basic` (a test keeps the two equivalent).
 
@@ -304,7 +319,7 @@ spec:
 
 ```
 acm-mock-resolver mockdata check --mock-data-file fixture.yaml
-# ok: 4 managed objects, 2 hub objects
+# ok: 3 managed objects, 2 hub objects
 acm-mock-resolver resolve --mock-data-file fixture.yaml --params extra.yaml policy.yaml
 ```
 
@@ -319,7 +334,8 @@ acm-mock-resolver resolve --mock-data-file fixture.yaml --params extra.yaml poli
    that do not involve a path apply: `apiVersion`, `kind` and `metadata.name` are required, scope is
    consistent, no duplicates (an identity may appear once in `managed` and once in `hub`; the two views are
    independent), and Secrets follow section 3, including `stringData` and the `gs-acm-utils.io/data-encoding`
-   annotation. There is no path/body agreement check.
+   annotation. The type and unknown-field rules (2 and 9 of section 2) apply as well. There is no path/body
+   agreement check.
 3. Scope: a known namespaced Kind needs `metadata.namespace`; a known cluster-scoped Kind must not have it.
    For an unknown Kind the first object of that Kind in the list sets the scope (namespaced when
    `metadata.namespace` is set) and the rest must agree.
@@ -327,8 +343,8 @@ acm-mock-resolver resolve --mock-data-file fixture.yaml --params extra.yaml poli
    `[]` (a `null` value counts as absent), means hub data is present; absent means `--hub-mode=resolve`
    fails with E12 on a hub template, as for a cohort without `hub/objects/`.
 5. `spec.hubContext` and `spec.params` are free-form maps like `hub/context.yaml` and `params.yaml`: absent or
-   `null` is none, `{}` is an empty map; their content is validated where it is used (param keys start with
-   an uppercase letter). `hubContext` is allowed without `hub`.
+   `null` is none, `{}` is an empty map. `spec.params` keys must start with an uppercase letter (a load error
+   otherwise); `hubContext` is allowed without `hub`.
 6. Nothing is synthesized at load time. As with directories, a Namespace object is derived for every
    namespace that holds objects, unless an explicit `v1/Namespace` object exists.
 
@@ -348,6 +364,8 @@ fixture.yaml: spec.managed[0]: missing metadata.name
 fixture.yaml: spec.managed[3] (v1/ConfigMap ns-a/x): Kind ConfigMap is namespaced but metadata.namespace is not set
 fixture.yaml: spec.managed[4]: duplicate object v1/ConfigMap ns-a/x (first defined at spec.managed[1])
 fixture.yaml: spec.managed[5] (v1/Secret ns-a/s): data.k is not valid base64 (annotation data-encoding: base64 is set)
+fixture.yaml: spec.managed[6] (v1/ConfigMap ns-a/y): unknown field "dta" for v1 ConfigMap (allowed: apiVersion, kind, metadata, data, binaryData, immutable)
+fixture.yaml: spec.params: params key "env" must be an exported identifier (start with an uppercase letter)
 fixture.yaml: unknown field "managd"
 fixture.yaml: spec.managed: no objects found
 fixture.yaml: does not exist
