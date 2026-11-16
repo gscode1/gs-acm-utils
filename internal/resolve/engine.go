@@ -274,11 +274,33 @@ func (e *UnsupportedResourceError) Error() string {
 
 func (e *UnsupportedResourceError) Unwrap() error { return e.Err }
 
+// escapedQuoteParseError is the text/template parse error for a `\"` inside
+// {{ }}: the library converts the JSON input to YAML (yaml.v3) before parsing,
+// and yaml.v3 writes a string double-quoted (escaping its quotes) when it cannot
+// use a block scalar, for example when a line ends in a space.
+const escapedQuoteParseError = `unexpected "\\" in operand`
+
+// EscapedQuoteError is a library template parse error caused by quotes that the
+// library's JSON-to-YAML conversion escaped. The message is the library's,
+// unchanged, followed by a hint line.
+type EscapedQuoteError struct{ Err error }
+
+func (e *EscapedQuoteError) Error() string {
+	return e.Err.Error() + "\nhint: a string holding a {{ }} template was converted to a double-quoted YAML " +
+		`string, so the quotes in the template became \". This happens when a line of the string ends ` +
+		"in a space, typically a template that resolved to empty (such as a missing hub value with " +
+		`--strict=false). Remove the space before the line break, or quote the template or give it a ` +
+		`default (| default "...").`
+}
+
+func (e *EscapedQuoteError) Unwrap() error { return e.Err }
+
 // translateError maps a ResolveTemplate error to a catalog error. Mock-data
 // errors raised inside template functions (E1-E4, E14) are returned directly
 // (they already carry a "referenced by" call); ErrMissingAPIResource becomes an
 // *UnsupportedResourceError; the library's "function protect not defined" parse
-// error becomes E14. Anything else is returned unchanged.
+// error becomes E14; a parse error on an escaped quote becomes an
+// *EscapedQuoteError (adds a hint). Anything else is returned unchanged.
 func translateError(err error) error {
 	var (
 		e1  *mockdata.ErrNamespaceDirMissing
@@ -303,6 +325,8 @@ func translateError(err error) error {
 		return &UnsupportedResourceError{Err: templates.ErrMissingAPIResource}
 	case strings.Contains(err.Error(), `function "protect" not defined`):
 		return &mockdata.ErrEncryptionUnsupported{}
+	case strings.Contains(err.Error(), escapedQuoteParseError):
+		return &EscapedQuoteError{Err: err}
 	}
 
 	return err

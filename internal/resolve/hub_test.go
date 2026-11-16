@@ -584,3 +584,63 @@ spec:
     - objectDefinition: {name: ghost, n: "0"}
 `)
 }
+
+// A hub value that resolves to empty (lenient mode, missing key) leaves a line
+// ending in a space inside a block scalar. The library's JSON-to-YAML conversion
+// then double-quotes the string, escaping the quotes inside the managed {{ }}
+// template, and parsing fails. The library error is kept and a hint is added.
+func TestEmptyHubValueEscapedQuoteHint(t *testing.T) {
+	files := map[string]string{
+		"objects/v1/ConfigMap/ns-a/mc.yaml": `apiVersion: v1
+kind: ConfigMap
+metadata: {name: mc, namespace: ns-a}
+data: {k: managed-value}
+`,
+		"hub/objects/v1/ConfigMap/policies/hc.yaml": `apiVersion: v1
+kind: ConfigMap
+metadata: {name: hc, namespace: policies}
+data: {k: hub-value}
+`,
+	}
+	e := newEngine(t, writeCohort(t, files), false)
+
+	policy := func(key string) []byte {
+		return []byte(`apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata: {name: cp}
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        kind: ConfigMap
+        metadata: {name: x}
+        data:
+          conf: |
+            hub: {{hub fromConfigMap "policies" "hc" "` + key + `" hub}}
+            managed: {{ fromConfigMap "ns-a" "mc" "k" }}
+`)
+	}
+
+	out, err := e.ResolveDocument(policy("k"), DocOptions{HubNamespace: "policies"})
+	if err != nil {
+		t.Fatalf("hub value present: %v", err)
+	}
+
+	if !strings.Contains(string(out), "managed: managed-value") {
+		t.Fatalf("hub value present: unexpected output\n%s", out)
+	}
+
+	_, err = e.ResolveDocument(policy("missing"), DocOptions{HubNamespace: "policies"})
+
+	var eq *EscapedQuoteError
+	if !errors.As(err, &eq) {
+		t.Fatalf("want *EscapedQuoteError, got %v", err)
+	}
+
+	msg := err.Error()
+	for _, want := range []string{`unexpected "\\" in operand`, "\nhint: ", "--strict=false"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message lacks %q:\n%s", want, msg)
+		}
+	}
+}
