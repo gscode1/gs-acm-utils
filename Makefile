@@ -2,10 +2,16 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/gscode1/gs-acm-utils/internal/cli.version=$(VERSION)
 BIN     := bin/acm-mock-resolver
 DIST    := dist
+IMAGE   ?= acm-mock-resolver:$(VERSION)
+# Optional private Go proxy for docker-build. GOPROXY_CREDENTIAL_FILE is a file
+# holding "user:token"; it is passed as a build secret, never as a build arg.
+GOPROXY_HOST ?=
+GOPROXY_PATH ?=
+GOPROXY_CREDENTIAL_FILE ?=
 # os/arch pairs built by `make release`.
 PLATFORMS := linux/amd64 linux/arm64 darwin/arm64
 
-.PHONY: build test lint fmt bench tidy release clean
+.PHONY: build test lint fmt bench tidy release clean docker-build
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/acm-mock-resolver
@@ -44,6 +50,17 @@ release: clean
 	done
 	@cd $(DIST) && (command -v sha256sum >/dev/null && sha256sum *.tar.gz || shasum -a 256 *.tar.gz) > sha256sums.txt
 	@cat $(DIST)/sha256sums.txt
+
+# docker-build builds the container image (BuildKit). With GOPROXY_CREDENTIAL_FILE
+# set, the credential is mounted as secret "goproxy_credential" (needs GOPROXY_HOST).
+docker-build:
+	DOCKER_BUILDKIT=1 docker build -t $(IMAGE) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GOPROXY_HOST=$(GOPROXY_HOST) \
+		--build-arg GOPROXY_PATH=$(GOPROXY_PATH) \
+		$(if $(GOPROXY_CREDENTIAL_FILE),--secret id=goproxy_credential$(comma)src=$(GOPROXY_CREDENTIAL_FILE)) .
+
+comma := ,
 
 clean:
 	rm -rf $(DIST)

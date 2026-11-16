@@ -50,6 +50,43 @@ git clone https://github.com/gscode1/gs-acm-utils.git && cd gs-acm-utils
 make build        # produces bin/acm-mock-resolver
 ```
 
+### Container image
+
+```
+make docker-build                      # image acm-mock-resolver:<version>
+docker run --rm -v "$PWD/testdata:/data:ro" acm-mock-resolver:dev validate --mock-data-dir /data/cohorts/basic /data/policies/
+```
+
+Build behind a private Go proxy (e.g. Artifactory). Put `user:token` (URL-encode special characters
+in the token) in a file outside the repository and pass it as a build **secret**; the proxy host and
+path are not secret and go in build args. The credential is only used by `go mod download`
+and never reaches a layer, `ENV` or the image history. Without `GOPROXY_HOST` the public proxy is used.
+
+```
+# docker (BuildKit)
+DOCKER_BUILDKIT=1 docker build -t acm-mock-resolver \
+  --build-arg GOPROXY_HOST=proxy.example.com --build-arg GOPROXY_PATH=/api/go/go-virtual \
+  --secret id=goproxy_credential,src=$HOME/.goproxy-credential .
+
+# podman / buildah
+podman build -t acm-mock-resolver \
+  --build-arg GOPROXY_HOST=proxy.example.com --build-arg GOPROXY_PATH=/api/go/go-virtual \
+  --secret id=goproxy_credential,src=$HOME/.goproxy-credential .
+
+# or via make
+make docker-build GOPROXY_HOST=proxy.example.com GOPROXY_PATH=/api/go/go-virtual \
+  GOPROXY_CREDENTIAL_FILE=$HOME/.goproxy-credential
+```
+
+**Never pass credentials with `--build-arg` or `ENV`**: build args are recorded in the image history.
+For private module paths that the proxy must not look up in the public checksum database, set
+`GOPRIVATE`/`GONOSUMDB` in your own build environment. Verify that nothing leaked:
+
+```
+docker history --no-trunc acm-mock-resolver | grep -c "<your token>"    # expect 0
+docker image inspect acm-mock-resolver | grep -c "<your token>"         # expect 0
+```
+
 ## Quick start
 
 A cohort is a directory of mock objects. The one used here is `testdata/cohorts/basic`:
