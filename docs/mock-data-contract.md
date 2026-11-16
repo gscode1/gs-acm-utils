@@ -238,3 +238,10 @@ validate that policy in a real environment.
 Template syntax and execution errors that are not mock-data problems (for example
 `template: tmpl:19: unexpected "{" in operand`) are passed through from the library unchanged and also
 exit with code 1.
+
+One of them gets an extra `hint:` line: `unexpected "\\" in operand`. The library converts each object to
+YAML before parsing its `{{ }}` templates, and it writes a string double-quoted (turning `"` into `\"`)
+when a line of the string ends in a space. A common cause is a template that resolved to empty, such as
+`retention: {{hub ... hub}}` in a `|` block with a missing hub value under `--strict=false`. The cluster
+controllers use the same library, so a live cluster likely fails the same way. *Fix:* remove the space before the
+line break, or quote the template or give it a default (`| default "7d"`).

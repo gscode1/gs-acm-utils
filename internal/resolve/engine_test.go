@@ -599,3 +599,24 @@ func TestInvalidArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestTranslateErrorEscapedQuote(t *testing.T) {
+	lib := errors.New(`failed to parse the template JSON string x: template: tmpl:5: unexpected "\\" in operand`)
+
+	err := translateError(lib)
+
+	var eq *EscapedQuoteError
+	if !errors.As(err, &eq) || !errors.Is(err, lib) {
+		t.Fatalf("want *EscapedQuoteError wrapping the library error, got %v", err)
+	}
+
+	if !strings.HasPrefix(err.Error(), lib.Error()+"\nhint: ") {
+		t.Errorf("library message must come first, then the hint:\n%s", err)
+	}
+
+	// Other parse errors pass through unchanged.
+	other := errors.New(`template: tmpl:19: unexpected "{" in operand`)
+	if got := translateError(other); got != other {
+		t.Errorf("other parse error changed: %v", got)
+	}
+}
