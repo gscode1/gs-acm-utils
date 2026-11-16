@@ -1,0 +1,17 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  annotations:
+    policy.open-cluster-management.io/disable-templates: "true"
+  name: disabled-templates
+spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        data:
+          script: oc get pods -o go-template='{{range .items}}{{.metadata.name}}{{end}}'
+        kind: ConfigMap
+        metadata:
+          name: scripts
+          namespace: default

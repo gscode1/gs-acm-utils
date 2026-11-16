@@ -117,3 +117,5 @@ validate:
 - Keep cohorts in version control next to the platform's cluster baselines; the paths in error messages
   (`objects/v1/ConfigMap/ns-a/my-config.yaml`) are exactly the files to fix.
 - Do not put secrets in cohorts. Use made-up values; templates only need the shape of the data.
+- A ConfigurationPolicy annotated `policy.open-cluster-management.io/disable-templates: "true"` passes
+  through untouched (its `{{ ... }}` are literal, e.g. `go-template` in a script), so it needs no mock data.

@@ -634,3 +634,127 @@ func TestAlwaysAdvertisedKindWithoutFiles(t *testing.T) {
 		t.Errorf("unadvertised kind must stay E4, got %v", err)
 	}
 }
+
+const disabledScript = `oc get pods -o go-template='{{range .items}}{{.metadata.name}}{{end}}'`
+
+// disableTemplatesCP renders a ConfigurationPolicy whose script contains a Go
+// template literal; ann is the annotations block (already indented under metadata).
+func disableTemplatesCP(ann string) string {
+	return `apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: cp
+` + ann + `spec:
+  object-templates:
+    - complianceType: musthave
+      objectDefinition:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata: {name: x}
+        data:
+          script: "` + disabledScript + `"
+          strict: '{{ fromConfigMap "ns-a" "missing" "k" }}'
+`
+}
+
+func TestDisableTemplatesAnnotation(t *testing.T) {
+	e := policyCohort(t)
+	const annTrue = "  annotations:\n    policy.open-cluster-management.io/disable-templates: \"true\"\n"
+
+	t.Run("standalone preserved verbatim", func(t *testing.T) {
+		out, err := e.ResolveDocument([]byte(disableTemplatesCP(annTrue)), DocOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sameYAML(t, out, disableTemplatesCP(annTrue))
+	})
+
+	t.Run("nested in Policy", func(t *testing.T) {
+		in := `apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata: {name: p, namespace: policies}
+spec:
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: off
+          annotations:
+            policy.open-cluster-management.io/disable-templates: "true"
+        spec:
+          object-templates:
+            - objectDefinition:
+                data:
+                  script: "` + disabledScript + `"
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata: {name: on}
+        spec:
+          object-templates:
+            - objectDefinition:
+                data: {k: '{{ fromConfigMap "ns-a" "one" "k" }}'}
+`
+
+		out, err := e.ResolveDocument([]byte(in), DocOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		want := strings.Replace(in, `'{{ fromConfigMap "ns-a" "one" "k" }}'`, "v1", 1)
+		sameYAML(t, out, want)
+	})
+
+	t.Run("hub templates still resolved", func(t *testing.T) {
+		e := newEngine(t, writeCohort(t, map[string]string{
+			"hub/objects/v1/ConfigMap/policies/hubcm.yaml": `apiVersion: v1
+kind: ConfigMap
+metadata: {name: hubcm, namespace: policies}
+data: {k: hubval}
+`,
+			"objects/v1/ConfigMap/ns-a/one.yaml": "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: one, namespace: ns-a}\ndata: {k: v1}\n",
+		}), true)
+
+		in := `apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata:
+  name: cp
+  namespace: policies
+  annotations:
+    policy.open-cluster-management.io/disable-templates: "true"
+spec:
+  object-templates:
+    - objectDefinition:
+        data:
+          hub: '{{hub fromConfigMap "" "hubcm" "k" hub}}'
+          script: "` + disabledScript + `"
+`
+
+		out, err := e.ResolveDocument([]byte(in), DocOptions{HubNamespace: "policies"})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		sameYAML(t, out, strings.Replace(in, `'{{hub fromConfigMap "" "hubcm" "k" hub}}'`, "hubval", 1))
+	})
+
+	t.Run("unannotated still evaluates and fails", func(t *testing.T) {
+		_, err := e.ResolveDocument([]byte(disableTemplatesCP("")), DocOptions{})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	for _, v := range []string{"false", "True", "yes", ""} {
+		t.Run("value "+v+" still evaluates", func(t *testing.T) {
+			ann := "  annotations:\n    policy.open-cluster-management.io/disable-templates: \"" + v + "\"\n"
+
+			_, err := e.ResolveDocument([]byte(disableTemplatesCP(ann)), DocOptions{})
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
