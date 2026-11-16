@@ -180,26 +180,71 @@ testdata/policies-failing/multi-doc-mixed.yaml#2: mock data: namespace directory
 the path must match the object's `apiVersion`, `kind`, namespace and name. Full rules, Secret encoding,
 the template context and the error catalog are in [docs/mock-data-contract.md](docs/mock-data-contract.md).
 
+## Mock data file (`--mock-data-file`)
+
+Instead of a cohort directory, one YAML/JSON file can hold one resolver context. It loads to the same
+mock data as the equivalent directory (managed view, hub view, hub context, params):
+
+```yaml
+apiVersion: acm-utils.gskode.com/v1alpha1
+kind: MockData
+metadata:
+  name: basic
+spec:
+  managed:                  # required, non-empty: the managed-cluster view ({{ ... }})
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: my-config, namespace: ns-a}
+      data: {color: blue}
+  hub:                      # optional: the hub view ({{hub ... hub}}); `hub: []` counts as hub data present
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: hub-config, namespace: policies}
+      data: {mode: test}
+  hubContext:               # optional: like hub/context.yaml (clusterName, clusterLabels)
+    clusterName: local-cluster
+    clusterLabels: {environment: dev, region: na}
+  params:                   # optional: like params.yaml (keys start with an uppercase letter)
+    Env: dev
+```
+
+```
+acm-mock-resolver mockdata check --mock-data-file testdata/fixtures/basic.yaml
+acm-mock-resolver resolve  --mock-data-file fixture.yaml policy.yaml
+acm-mock-resolver validate --mock-data-file fixture.yaml policies/
+```
+
+Pass exactly one of `--mock-data-dir` and `--mock-data-file` (usage error, exit 3, otherwise).
+`--params` merges over `spec.params`; `--cluster-name` wins over `spec.hubContext.clusterName`.
+The per-object rules (identity, scope, duplicates, Secret encoding) are those of the directory format,
+except that there is no path to agree with. Details and error messages:
+[docs/mock-data-contract.md](docs/mock-data-contract.md#7-consolidated-file-format).
+
+**Boundary:** one file is one cluster identity. Multi-cluster groupings (for example gitops-pr-review
+PolicyFixture groups with a target fixture plus a central catalog) are not supported and not merged:
+the caller selects one context and emits one file.
+
 ## Commands and flags
 
 | Command | Purpose |
 |---|---|
 | `resolve [FILE\|-]` | Resolve one input (stdin when absent) and print the YAML. Multi-document input is joined with `---`; nothing is printed if any document fails. |
 | `validate PATH...` | Resolve files and directories (recursive, `.yaml`/`.yml`); failures go to stderr, `N passed, M failed` to stdout. |
-| `mockdata check` | Load and validate the cohort only. |
+| `mockdata check` | Load and validate the mock data (directory or file) only. |
 | `version` | Print the version. |
 
-Flags of `resolve` and `validate` (`mockdata check` takes `--mock-data-dir`):
+Flags of `resolve` and `validate` (`mockdata check` takes only the two mock-data flags):
 
 | Flag | Default | Description |
 |---|---|---|
-| `--mock-data-dir DIR` | required | Cohort directory. |
+| `--mock-data-dir DIR` | one of the two | Cohort directory. |
+| `--mock-data-file FILE` | one of the two | Consolidated mock-data file (mutually exclusive with `--mock-data-dir`). |
 | `--hub-mode` | `resolve` | `resolve`, `passthrough` (replace hub templates by their inner text, with a warning) or `forbid`. |
-| `--cluster-name` | `hub/context.yaml` | Value of `.ManagedClusterName`. |
+| `--cluster-name` | `hub/context.yaml` or `spec.hubContext` | Value of `.ManagedClusterName`. |
 | `--hub-namespace` | the Policy's namespace | Namespace for hub template lookups. |
 | `--object-namespace` | empty | Value of `.ObjectNamespace`. |
 | `--object-name` | empty | Value of `.ObjectName`. |
-| `--params FILE` | none | YAML/JSON with extra template context keys. |
+| `--params FILE` | none | YAML/JSON with extra template context keys, merged over `params.yaml` / `spec.params`. |
 | `--strict` | `true` | Fail on missing objects and keys; `--strict=false` mimics a live cluster. |
 | `--skip-policy-validation` | `false` | Treat input that is not a policy kind as a raw Go template. |
 | `--disable fn1,fn2` | none | Template functions to disable. |
@@ -211,8 +256,8 @@ Flags of `resolve` and `validate` (`mockdata check` takes `--mock-data-dir`):
 |---|---|
 | 0 | All inputs resolved. |
 | 1 | One or more inputs failed to resolve (template error, missing mock data, leftover `{{hub`). |
-| 2 | The mock-data directory failed to load or validate. |
-| 3 | Usage error: bad or missing flags, unreadable or missing input, no input files. |
+| 2 | The mock-data directory or file failed to load or validate. |
+| 3 | Usage error: bad, missing or conflicting flags (for example both or neither of the mock-data flags), unreadable or missing input, no input files. |
 
 ## CI
 
