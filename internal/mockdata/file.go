@@ -160,6 +160,10 @@ func (fl *fileLoader) load(data []byte) *Set {
 	set.HubContext = fl.freeMap(spec, "hubContext")
 	set.Params = fl.freeMap(spec, "params")
 
+	for _, reason := range paramKeyProblems(set.Params) {
+		fl.invalid("spec.params", reason)
+	}
+
 	return set
 }
 
@@ -270,6 +274,12 @@ func (fl *fileLoader) parseItem(loc *FileLoc, item any) *fileObj {
 
 	u := &unstructured.Unstructured{Object: m}
 
+	if reason := identityProblem(u); reason != "" {
+		fl.errs = append(fl.errs, &ErrInvalidFile{Loc: loc, Reason: reason})
+
+		return nil
+	}
+
 	apiVersion, kind, name, ns, missing := requiredFields(u)
 	if missing != "" {
 		fl.errs = append(fl.errs, &ErrMissingName{Loc: loc, Field: missing})
@@ -278,6 +288,12 @@ func (fl *fileLoader) parseItem(loc *FileLoc, item any) *fileObj {
 	}
 
 	loc.Ident = identString(apiVersion, kind, ns, name)
+
+	if reason := unknownFieldProblem(apiVersion, kind, m); reason != "" {
+		fl.errs = append(fl.errs, &ErrInvalidFile{Loc: loc, Reason: reason})
+
+		return nil
+	}
 
 	if err := normalizeIfSecret(loc.File+": "+loc.Path, apiVersion, kind, m); err != nil {
 		fl.errs = append(fl.errs, attachLoc(err, loc))

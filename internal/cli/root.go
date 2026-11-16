@@ -4,6 +4,7 @@ package cli
 import (
 	"flag"
 	"io"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 	klogv1 "k8s.io/klog"
@@ -14,6 +15,34 @@ import (
 //
 //	-ldflags "-X github.com/gscode1/gs-acm-utils/internal/cli.version=v1.2.3"
 var version = "dev"
+
+const devVersion = "dev"
+
+// resolveVersion returns the version to report. A version injected by ldflags
+// (anything but the "dev" default) wins; otherwise the module version recorded
+// by `go install module@vX.Y.Z` is used, ignoring the empty and "(devel)"
+// values of local builds.
+func resolveVersion(ldflags, moduleVersion string) string {
+	if ldflags != devVersion {
+		return ldflags
+	}
+
+	if moduleVersion == "" || moduleVersion == "(devel)" {
+		return devVersion
+	}
+
+	return moduleVersion
+}
+
+// buildVersion is resolveVersion with the running binary's build info.
+func buildVersion() string {
+	var mod string
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		mod = bi.Main.Version
+	}
+
+	return resolveVersion(version, mod)
+}
 
 // Run executes the CLI with args (without the program name) and returns the
 // process exit code. It prints a returned error to stderr exactly once.
@@ -90,7 +119,7 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print the acm-mock-resolver version",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := io.WriteString(cmd.OutOrStdout(), version+"\n")
+			_, err := io.WriteString(cmd.OutOrStdout(), buildVersion()+"\n")
 
 			return err
 		},
