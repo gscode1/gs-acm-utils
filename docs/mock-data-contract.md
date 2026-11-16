@@ -5,6 +5,9 @@ clusters that look alike). `acm-mock-resolver` reads it with `--mock-data-dir DI
 `fromConfigMap`, `fromSecret`, `lookup`, `copyConfigMapData`, `copySecretData`, `fromClusterClaim`,
 node functions and label-selector lists from it. No kubeconfig and no network are used.
 
+The same context can instead be written as one file and passed with `--mock-data-file FILE`; see
+[section 7](#7-consolidated-file-format). Everything below describes the directory format unless stated.
+
 Check a cohort at any time (this is what you run before committing changes to it):
 
 ```
@@ -255,3 +258,114 @@ when a line of the string ends in a space. A common cause is a template that res
 `retention: {{hub ... hub}}` in a `|` block with a missing hub value under `--strict=false`. The cluster
 controllers use the same library, so a live cluster likely fails the same way. *Fix:* remove the space before the
 line break, or quote the template or give it a default (`| default "7d"`).
+
+## 7. Consolidated file format
+
+`--mock-data-file FILE` loads one YAML or JSON document holding one resolver context. It produces the same
+mock data as the equivalent cohort directory; the directory format is unchanged. Pass exactly one of
+`--mock-data-dir` and `--mock-data-file` (a usage error, exit 3, otherwise). The conventional file name is
+`fixture.yaml`; any path is accepted. `testdata/fixtures/basic.yaml` is the file form of
+`testdata/cohorts/basic` (a test keeps the two equivalent).
+
+```yaml
+apiVersion: acm-utils.gskode.com/v1alpha1
+kind: MockData
+metadata:
+  name: basic                 # optional label; only `name` is allowed
+spec:
+  managed:                    # required, non-empty list  -> objects/ (managed view)
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: my-config, namespace: ns-a, labels: {color: blue}}
+      data: {color: blue, size: "3"}
+    - apiVersion: v1
+      kind: Secret
+      metadata: {name: db-creds, namespace: ns-a}
+      data: {password: s3cr3t-plaintext}      # plaintext, as in section 3
+      stringData: {username: admin}
+    - apiVersion: cluster.open-cluster-management.io/v1alpha1
+      kind: ClusterClaim
+      metadata: {name: id.k8s.io}
+      spec: {value: 7b1c0f4e-8f1d-4f0a-9a57-000000000001}
+  hub:                        # optional list -> hub/objects/ (hub view); `hub: []` = hub data present
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: hub-config, namespace: policies}
+      data: {logLevel: debug}
+    - apiVersion: cluster.open-cluster-management.io/v1
+      kind: ManagedCluster
+      metadata: {name: local-cluster, labels: {environment: dev}}
+  hubContext:                 # optional map -> hub/context.yaml
+    clusterName: local-cluster
+    clusterLabels: {environment: dev, region: na}
+  params:                     # optional map -> params.yaml
+    Env: dev
+```
+
+```
+acm-mock-resolver mockdata check --mock-data-file fixture.yaml
+# ok: 4 managed objects, 2 hub objects
+acm-mock-resolver resolve --mock-data-file fixture.yaml --params extra.yaml policy.yaml
+```
+
+### Rules
+
+1. The file holds exactly one YAML/JSON mapping document (no `---` multi-document; `.json` files skip that
+   check as in the directory format). Unknown fields at the top level, in `metadata` and in `spec` are
+   rejected, and so is a duplicate mapping key anywhere in the file (the directory format does not detect
+   duplicate keys; this is the one parsing divergence). `apiVersion` must be
+   `acm-utils.gskode.com/v1alpha1` and `kind` `MockData`; `spec` is required.
+2. `spec.managed` and `spec.hub` are lists of objects, each a mapping. Per object the rules of section 2
+   that do not involve a path apply: `apiVersion`, `kind` and `metadata.name` are required, scope is
+   consistent, no duplicates (an identity may appear once in `managed` and once in `hub`; the two views are
+   independent), and Secrets follow section 3, including `stringData` and the `gs-acm-utils.io/data-encoding`
+   annotation. There is no path/body agreement check.
+3. Scope: a known namespaced Kind needs `metadata.namespace`; a known cluster-scoped Kind must not have it.
+   For an unknown Kind the first object of that Kind in the list sets the scope (namespaced when
+   `metadata.namespace` is set) and the rest must agree.
+4. `spec.managed` absent or an empty list is an error (the equivalent of E15). `spec.hub` present, even as
+   `[]` (a `null` value counts as absent), means hub data is present; absent means `--hub-mode=resolve`
+   fails with E12 on a hub template, as for a cohort without `hub/objects/`.
+5. `spec.hubContext` and `spec.params` are free-form maps like `hub/context.yaml` and `params.yaml`: absent or
+   `null` is none, `{}` is an empty map; their content is validated where it is used (param keys start with
+   an uppercase letter). `hubContext` is allowed without `hub`.
+6. Nothing is synthesized at load time. As with directories, a Namespace object is derived for every
+   namespace that holds objects, unless an explicit `v1/Namespace` object exists.
+
+### Precedence
+
+`--params FILE` keys are merged over `spec.params`; `--cluster-name` wins over `spec.hubContext.clusterName`,
+which wins over the `ManagedCluster` / default lookup (section 5).
+
+### Errors
+
+Every load failure, including an unreadable file, exits with code 2 and lists all problems, sorted by
+position (`spec.managed[2]` before `spec.managed[10]`), each prefixed with the path as given and the YAML
+path, plus `(apiVersion/Kind namespace/name)` when known:
+
+```
+fixture.yaml: spec.managed[0]: missing metadata.name
+fixture.yaml: spec.managed[3] (v1/ConfigMap ns-a/x): Kind ConfigMap is namespaced but metadata.namespace is not set
+fixture.yaml: spec.managed[4]: duplicate object v1/ConfigMap ns-a/x (first defined at spec.managed[1])
+fixture.yaml: spec.managed[5] (v1/Secret ns-a/s): data.k is not valid base64 (annotation data-encoding: base64 is set)
+fixture.yaml: unknown field "managd"
+fixture.yaml: spec.managed: no objects found
+fixture.yaml: does not exist
+```
+
+Resolve-time errors keep their catalog entry (E1-E4, E12) with file wording:
+
+```
+mock data: no v1/ConfigMap objects in namespace no-such-ns under spec.managed (fixture.yaml) (referenced by fromConfigMap "no-such-ns" "cm" "k")
+mock data: object not found: v1/ConfigMap ns-a/zzz in spec.managed (fixture.yaml)
+mock data: key "nope" not found in fixture.yaml: spec.managed[0] (v1/ConfigMap ns-a/my-config) (data has: color, size)
+mock data: lookup not supported for apiVersion=apps/v1, Kind=Deployment (no objects of that Kind in spec.managed (fixture.yaml))
+mock data: input contains {{hub templates but spec.hub (fixture.yaml) is absent (use --hub-mode=passthrough to skip)
+```
+
+### Boundary
+
+One file is one cluster identity (one resolver context). Grouped fixtures such as gitops-pr-review
+`PolicyFixture` groups (`targetFixtures` plus a central catalog) are not supported and are not merged by the
+tool: the caller selects one context and emits one file for it. A directory/file converter and a published
+JSON Schema are out of scope.

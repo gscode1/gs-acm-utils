@@ -135,13 +135,11 @@ func (s *strictFuncs) get(apiVersion, kind, ns, name string) (*unstructured.Unst
 			continue
 		}
 
-		dir := e4.Dir
-
 		if k.Namespaced {
-			return nil, &mockdata.ErrNamespaceDirMissing{Dir: dir + ns + "/"}
+			return nil, s.ix.NamespaceMissing(apiVersion, kind, ns)
 		}
 
-		return nil, &mockdata.ErrObjectMissing{Path: dir + name + ".yaml"}
+		return nil, s.ix.ObjectMissing(apiVersion, kind, "", name)
 	}
 
 	return nil, err
@@ -195,11 +193,7 @@ func (s *strictFuncs) lookup(
 
 	namespaced, known := s.scope(apiVersion, kind)
 	if !known {
-		return nil, &mockdata.ErrLookupUnsupported{
-			APIVersion: apiVersion,
-			Kind:       kind,
-			Dir:        s.ix.Prefix() + "/" + apiVersion + "/" + kind + "/",
-		}
+		return nil, s.ix.Unsupported(apiVersion, kind)
 	}
 
 	if !namespaced && s.lookupNamespace != "" {

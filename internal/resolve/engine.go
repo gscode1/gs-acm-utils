@@ -43,7 +43,8 @@ type Options struct {
 	Strict bool
 	// Disabled lists extra template function names to disable. "protect" is always disabled.
 	Disabled []string
-	// Cohort is the cohort directory, used only in error messages (E12).
+	// Cohort labels the mock-data source (cohort directory or mock-data file),
+	// used only in error messages.
 	Cohort string
 	// Warn receives non-fatal warnings (the --hub-mode=passthrough stub warning).
 	// Nil discards them; the CLI passes stderr.
@@ -77,7 +78,9 @@ type Engine struct {
 	opts     Options
 	disabled []string
 	managed  clients
-	hub      *clients // nil when the cohort has no hub/objects
+	hub      *clients // nil when the mock data has no hub view
+	// hubWhere locates the hub view for E12 when the mock data is a file ("" for directories).
+	hubWhere string
 
 	// params and hubContext are the cohort's params.yaml and hub/context.yaml.
 	params     map[string]any
@@ -100,6 +103,10 @@ func NewEngine(set *mockdata.Set, opts Options) (*Engine, error) {
 	}
 
 	e := &Engine{opts: opts, disabled: disabled, params: set.Params, hubContext: set.HubContext}
+
+	if set.Hub != nil {
+		e.hubWhere = set.Hub.Where()
+	}
 
 	dyn, disc, err := fakecluster.New(set.Managed)
 	if err != nil {
@@ -202,7 +209,7 @@ func (s *Session) Hub() (*templates.TemplateResolver, error) {
 	}
 
 	if s.e.hub == nil {
-		return nil, &mockdata.ErrHubDataMissing{Cohort: s.e.opts.Cohort}
+		return nil, &mockdata.ErrHubDataMissing{Cohort: s.e.opts.Cohort, Where: s.e.hubWhere}
 	}
 
 	r, err := templates.NewResolverWithClients(s.e.hub.dyn, s.e.hub.disc, templates.Config{
@@ -234,7 +241,19 @@ func (s *Session) Resolve(pass Pass, input []byte, ctx any, po PassOptions) (tem
 
 	res, err := r.ResolveTemplate(input, ctx, s.e.resolveOptions(pass, po))
 	if err != nil {
-		return res, translateError(err)
+		where := s.e.managed.ix.Where()
+		if pass == HubPass && s.e.hub != nil {
+			where = s.e.hub.ix.Where()
+		}
+
+		err = translateError(err)
+
+		var uns *UnsupportedResourceError
+		if errors.As(err, &uns) {
+			uns.Where = where
+		}
+
+		return res, err
 	}
 
 	return res, nil
@@ -265,9 +284,19 @@ func (e *Engine) ResolveRaw(input []byte, ctx any) ([]byte, error) {
 // that has no mock data (the library's ErrMissingAPIResource). The library does
 // not say which Kind, so the message is generic; strict lookups return the
 // precise *mockdata.ErrLookupUnsupported (E4) instead.
-type UnsupportedResourceError struct{ Err error }
+type UnsupportedResourceError struct {
+	Err error
+	// Where is set (for example "spec.managed (fixture.yaml)") when the mock
+	// data came from a consolidated file instead of a cohort directory.
+	Where string
+}
 
 func (e *UnsupportedResourceError) Error() string {
+	if e.Where != "" {
+		return "mock data: lookup not supported: the requested apiVersion/Kind has no objects in " + e.Where + " (" +
+			e.Err.Error() + ")"
+	}
+
 	return "mock data: lookup not supported: the requested apiVersion/Kind has no files under objects/ (" +
 		e.Err.Error() + ")"
 }

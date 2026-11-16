@@ -17,6 +17,7 @@ import (
 // commonFlags are the flags shared by resolve and validate (plan section 6).
 type commonFlags struct {
 	mockDataDir          string
+	mockDataFile         string
 	hubMode              string
 	clusterName          string
 	hubNamespace         string
@@ -30,20 +31,44 @@ type commonFlags struct {
 
 func (f *commonFlags) bind(cmd *cobra.Command) {
 	fl := cmd.Flags()
-	fl.StringVar(&f.mockDataDir, "mock-data-dir", "", "cohort directory holding the mock objects (required)")
+	fl.StringVar(&f.mockDataDir, "mock-data-dir", "", "cohort directory holding the mock objects")
+	fl.StringVar(&f.mockDataFile, "mock-data-file", "", mockDataFileHelp)
 	fl.StringVar(&f.hubMode, "hub-mode", string(resolve.HubModeResolve),
 		"how {{hub ... hub}} templates are handled: resolve|passthrough|forbid")
-	fl.StringVar(&f.clusterName, "cluster-name", "", "value of .ManagedClusterName (default: hub/context.yaml clusterName)")
+	fl.StringVar(&f.clusterName, "cluster-name", "", "value of .ManagedClusterName (default: hub/context.yaml or hubContext clusterName)")
 	fl.StringVar(&f.hubNamespace, "hub-namespace", "", "namespace for hub template lookups (default: the Policy's namespace)")
 	fl.StringVar(&f.objectNamespace, "object-namespace", "", "value of .ObjectNamespace")
 	fl.StringVar(&f.objectName, "object-name", "", "value of .ObjectName")
-	fl.StringVar(&f.paramsFile, "params", "", "YAML/JSON file with extra template context keys (exported identifiers)")
+	fl.StringVar(&f.paramsFile, "params", "", "YAML/JSON file with extra template context keys (exported identifiers); merged over the cohort's params.yaml or the file's spec.params")
 	fl.BoolVar(&f.strict, "strict", true, "fail on missing mock objects and keys (--strict=false mimics a live cluster)")
 	fl.BoolVar(&f.skipPolicyValidation, "skip-policy-validation", false,
 		"treat input that is not a policy kind as a raw Go template")
 	fl.StringSliceVar(&f.disable, "disable", nil, "template functions to disable (comma-separated or repeated)")
 
-	_ = cmd.MarkFlagRequired("mock-data-dir")
+	markMockDataFlags(cmd)
+}
+
+const mockDataFileHelp = "consolidated mock-data file (YAML/JSON, one resolver context); exactly one of --mock-data-dir and --mock-data-file"
+
+// markMockDataFlags makes --mock-data-dir and --mock-data-file mutually
+// exclusive and requires one of them (cobra reports a usage error otherwise).
+func markMockDataFlags(cmd *cobra.Command) {
+	cmd.MarkFlagsOneRequired("mock-data-dir", "mock-data-file")
+	cmd.MarkFlagsMutuallyExclusive("mock-data-dir", "mock-data-file")
+}
+
+// loadMockData loads the directory or the file, whichever flag was given, and
+// returns the label used for it in error messages.
+func loadMockData(dir, file string) (*mockdata.Set, string, error) {
+	if file != "" {
+		set, err := mockdata.LoadFile(file)
+
+		return set, file, err
+	}
+
+	set, err := mockdata.Load(dir)
+
+	return set, dir, err
 }
 
 // docOptions validates the flag values and builds the per-document options.
@@ -101,10 +126,10 @@ func unwrapPath(err error) error {
 	return err
 }
 
-// loadEngine loads the cohort (once) and builds the resolve engine. A load
+// loadEngine loads the mock data (once) and builds the resolve engine. A load
 // failure is returned as *mockdata.LoadErrors (exit 2).
 func (f *commonFlags) loadEngine(warn io.Writer) (*resolve.Engine, error) {
-	set, err := mockdata.Load(f.mockDataDir)
+	set, label, err := loadMockData(f.mockDataDir, f.mockDataFile)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +137,7 @@ func (f *commonFlags) loadEngine(warn io.Writer) (*resolve.Engine, error) {
 	e, err := resolve.NewEngine(set, resolve.Options{
 		Strict:   f.strict,
 		Disabled: f.disable,
-		Cohort:   f.mockDataDir,
+		Cohort:   label,
 		Warn:     warn,
 	})
 	if err != nil {

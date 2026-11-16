@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-
-	"github.com/gscode1/gs-acm-utils/internal/mockdata"
 )
 
 func newMockdataCmd() *cobra.Command {
@@ -20,14 +18,14 @@ func newMockdataCmd() *cobra.Command {
 }
 
 func newMockdataCheckCmd() *cobra.Command {
-	var dir string
+	var dir, file string
 
 	cmd := &cobra.Command{
 		Use:   "check",
-		Short: "Load and validate a mock-data cohort",
+		Short: "Load and validate mock data (a cohort directory or a mock-data file)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			set, err := mockdata.Load(dir)
+			set, _, err := loadMockData(dir, file)
 			if err != nil {
 				return err
 			}
@@ -39,8 +37,9 @@ func newMockdataCheckCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&dir, "mock-data-dir", "", "cohort directory to check (required)")
-	_ = cmd.MarkFlagRequired("mock-data-dir")
+	cmd.Flags().StringVar(&dir, "mock-data-dir", "", "cohort directory to check")
+	cmd.Flags().StringVar(&file, "mock-data-file", "", "mock-data file to check")
+	markMockDataFlags(cmd)
 
 	return cmd
 }

@@ -85,7 +85,7 @@ func Load(root string) (*Set, error) {
 
 	set.Managed, _, seen = l.loadTree("objects")
 	if set.Managed == nil {
-		set.Managed = newIndex("objects")
+		set.Managed = newIndex(dirSource{prefix: "objects"})
 	}
 
 	if seen == 0 {
@@ -94,7 +94,7 @@ func Load(root string) (*Set, error) {
 
 	hub, present, _ := l.loadTree("hub/objects")
 	if hub == nil {
-		hub = newIndex("hub/objects")
+		hub = newIndex(dirSource{prefix: "hub/objects"})
 	}
 
 	set.Hub, set.HubPresent = hub, present
@@ -176,8 +176,17 @@ func (l *loader) loadMap(rel string) map[string]any {
 
 // decodeMap converts YAML (or JSON) to a map using sigs.k8s.io/yaml and the
 // Kubernetes JSON decoder (integers stay int64). An empty document yields nil.
-func decodeMap(data []byte) (map[string]any, error) {
-	js, err := yaml.YAMLToJSON(data)
+func decodeMap(data []byte) (map[string]any, error) { return decodeMapMode(data, false) }
+
+// decodeMapMode is decodeMap; strict additionally rejects duplicate mapping
+// keys anywhere in the document (used by the mock-data file format).
+func decodeMapMode(data []byte, strict bool) (map[string]any, error) {
+	conv := yaml.YAMLToJSON
+	if strict {
+		conv = yaml.YAMLToJSONStrict
+	}
+
+	js, err := conv(data)
 	if err != nil {
 		return nil, err
 	}
@@ -360,14 +369,9 @@ func (l *loader) parseFile(abs, rel, display string) (*parsedFile, error) {
 
 	u := &unstructured.Unstructured{Object: m}
 
-	bodyAV, bodyKind, bodyName, bodyNS := u.GetAPIVersion(), u.GetKind(), u.GetName(), u.GetNamespace()
-
-	for _, f := range []struct{ name, val string }{
-		{"apiVersion", bodyAV}, {"kind", bodyKind}, {"metadata.name", bodyName},
-	} {
-		if f.val == "" {
-			return nil, &ErrMissingName{Path: display, Field: f.name}
-		}
+	bodyAV, bodyKind, bodyName, bodyNS, missing := requiredFields(u)
+	if missing != "" {
+		return nil, &ErrMissingName{Path: display, Field: missing}
 	}
 
 	stem := strings.TrimSuffix(file, filepath.Ext(file))
@@ -394,10 +398,8 @@ func (l *loader) parseFile(abs, rel, display string) (*parsedFile, error) {
 		u.SetNamespace(ns)
 	}
 
-	if kind == "Secret" && apiVersion == "v1" {
-		if err := normalizeSecret(display, m); err != nil {
-			return nil, err
-		}
+	if err := normalizeIfSecret(display, apiVersion, kind, m); err != nil {
+		return nil, err
 	}
 
 	return &parsedFile{
@@ -406,9 +408,38 @@ func (l *loader) parseFile(abs, rel, display string) (*parsedFile, error) {
 	}, nil
 }
 
+// requiredFields returns the body identity of an object, or the name of the
+// first required field (apiVersion, kind, metadata.name) that is empty. Shared
+// by the directory and file loaders.
+func requiredFields(u *unstructured.Unstructured) (apiVersion, kind, name, ns, missing string) {
+	apiVersion, kind, name, ns = u.GetAPIVersion(), u.GetKind(), u.GetName(), u.GetNamespace()
+
+	for _, f := range []struct{ name, val string }{
+		{"apiVersion", apiVersion}, {"kind", kind}, {"metadata.name", name},
+	} {
+		if f.val == "" {
+			return apiVersion, kind, name, ns, f.name
+		}
+	}
+
+	return apiVersion, kind, name, ns, ""
+}
+
+// normalizeIfSecret applies Secret normalization (plaintext data, stringData,
+// the data-encoding annotation) to v1/Secret objects and ignores everything
+// else. Shared by the directory and file loaders; the Secret checks are never
+// weakened for either.
+func normalizeIfSecret(path, apiVersion, kind string, obj map[string]any) error {
+	if kind == "Secret" && apiVersion == "v1" {
+		return normalizeSecret(path, obj)
+	}
+
+	return nil
+}
+
 // buildIndex enforces scope consistency (E7) and uniqueness (E8) and builds the index.
 func (l *loader) buildIndex(prefix string, files []*parsedFile) *Index {
-	ix := newIndex(prefix)
+	ix := newIndex(dirSource{prefix: prefix})
 
 	sort.SliceStable(files, func(i, j int) bool { return files[i].path < files[j].path })
 
@@ -456,7 +487,7 @@ func (l *loader) buildIndex(prefix string, files []*parsedFile) *Index {
 
 		firstPath[id] = f.path
 
-		ix.add(f.apiVersion, f.kind, f.ns, f.name, f.namespaced, f.obj, f.path)
+		ix.add(f.apiVersion, f.kind, f.ns, f.name, f.namespaced, f.obj, f.path, 0)
 	}
 
 	return ix
