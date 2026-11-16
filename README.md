@@ -40,7 +40,7 @@ Release binaries (linux/amd64, linux/arm64, darwin/arm64) are on the
 
 ```
 sha256sum -c --ignore-missing sha256sums.txt      # macOS: shasum -a 256 -c --ignore-missing sha256sums.txt
-tar -xzf acm-mock-resolver_v0.1.0_linux_amd64.tar.gz
+tar -xzf acm-mock-resolver_v0.2.0_linux_amd64.tar.gz
 ```
 
 From source:
