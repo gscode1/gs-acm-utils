@@ -44,7 +44,7 @@ func TestMockdataCheckFile(t *testing.T) {
 		t.Fatalf("stdout %q", out)
 	}
 
-	contains(t, "stderr", errs, "fixture.yaml: spec.managed: no objects found", "mock data failed to load: 1 error")
+	contains(t, "stderr", errs, "fixture.yaml: spec: no objects found: neither spec.managed nor spec.hub contains objects", "mock data failed to load: 1 error")
 
 	code, _, errs = run(t, "", "mockdata", "check", "--mock-data-file", "/nonexistent/f.yaml")
 	wantCode(t, code, ExitMockData, errs)
@@ -147,4 +147,40 @@ spec:
 			}
 		})
 	}
+}
+
+const hubOnlyFixture = `apiVersion: acm-utils.gskode.com/v1alpha1
+kind: MockData
+spec:
+  managed: []
+  hub:
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: hc, namespace: policies}
+      data: {k: hub-value}
+`
+
+func TestHubOnlyMockDataFile(t *testing.T) {
+	f := writeTemp(t, "hub-only.yaml", hubOnlyFixture)
+
+	code, out, errs := run(t, "", "mockdata", "check", "--mock-data-file", f)
+	wantCode(t, code, ExitOK, errs)
+
+	if out != "ok: 0 managed objects, 1 hub objects\n" {
+		t.Fatalf("stdout %q", out)
+	}
+
+	pol := writeTemp(t, "policy.yaml", `apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+metadata: {name: cp}
+spec:
+  object-templates:
+    - objectDefinition:
+        kind: ConfigMap
+        data: {v: '{{hub fromConfigMap "policies" "hc" "k" hub}}'}
+`)
+
+	code, out, errs = run(t, "", "resolve", "--skip-policy-validation", "--mock-data-file", f, "--hub-namespace", "policies", pol)
+	wantCode(t, code, ExitOK, errs)
+	contains(t, "stdout", out, "v: hub-value")
 }

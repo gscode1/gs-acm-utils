@@ -149,14 +149,17 @@ func (fl *fileLoader) load(data []byte) *Set {
 
 	set := &Set{}
 
-	var count int
+	var managedCount, hubCount int
 
-	set.Managed, _, count = fl.loadView(spec, viewManaged, 1)
-	if count == 0 {
-		fl.errs = append(fl.errs, &ErrEmptyCohort{Cohort: fl.file, Loc: fl.loc("spec.managed", 1, -1)})
+	set.Managed, _, managedCount = fl.loadView(spec, viewManaged, 1)
+	set.Hub, set.HubPresent, hubCount = fl.loadView(spec, viewHub, 2)
+
+	// Hub-only is valid: managed may be empty when hub holds objects. A view
+	// that is not a list (-1) already reported its own error; no extra E15.
+	if managedCount == 0 && hubCount == 0 {
+		fl.errs = append(fl.errs, &ErrEmptyCohort{Cohort: fl.file, Loc: fl.loc("spec", 0, -1)})
 	}
 
-	set.Hub, set.HubPresent, _ = fl.loadView(spec, viewHub, 2)
 	set.HubContext = fl.freeMap(spec, "hubContext")
 	set.Params = fl.freeMap(spec, "params")
 

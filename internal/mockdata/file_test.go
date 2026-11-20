@@ -280,6 +280,28 @@ func TestLoadFileDirMessagesUnchanged(t *testing.T) {
 	}
 }
 
+const e15File = "fixture.yaml: spec: no objects found: neither spec.managed nor spec.hub contains objects"
+
+func TestLoadFileHubOnly(t *testing.T) {
+	for name, managed := range map[string]string{
+		"managed absent": "",
+		"managed null":   "  managed: null\n",
+		"managed empty":  "  managed: []\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			set := mustLoadFile(t, "fixture.yaml", fileHeader+managed+"  hub:\n"+item("h"))
+
+			if set.Managed == nil || len(set.Managed.Objects()) != 0 {
+				t.Fatalf("Managed = %v, want empty non-nil index", set.Managed)
+			}
+
+			if !set.HubPresent || set.Hub == nil || len(set.Hub.Objects()) != 1 {
+				t.Fatalf("hub not loaded: present=%v", set.HubPresent)
+			}
+		})
+	}
+}
+
 func TestLoadFileSchemaErrors(t *testing.T) {
 	cases := map[string]struct {
 		content string
@@ -337,13 +359,36 @@ func TestLoadFileSchemaErrors(t *testing.T) {
 			fileHeader + "  managed:\n" + item("a") + "  params: [1]\n",
 			[]string{"fixture.yaml: spec.params: must be a mapping"},
 		},
-		"managed absent": {
+		"managed absent, hub empty": {
 			fileHeader + "  hub: []\n",
-			[]string{"fixture.yaml: spec.managed: no objects found"},
+			[]string{e15File},
 		},
-		"managed empty": {
+		"managed empty, hub absent": {
 			fileHeader + "  managed: []\n",
-			[]string{"fixture.yaml: spec.managed: no objects found"},
+			[]string{e15File},
+		},
+		"managed null, hub null": {
+			fileHeader + "  managed: null\n  hub: null\n",
+			[]string{e15File},
+		},
+		"spec empty": {
+			fileHeader + "  hubContext: {a: b}\n",
+			[]string{e15File},
+		},
+		"managed not a list, hub empty": {
+			fileHeader + "  managed: x\n  hub: []\n",
+			[]string{"fixture.yaml: spec.managed: must be a list"},
+		},
+		"managed empty, hub not a list": {
+			fileHeader + "  managed: []\n  hub: {a: b}\n",
+			[]string{"fixture.yaml: spec.hub: must be a list"},
+		},
+		"managed empty, hub items all invalid": {
+			fileHeader + "  managed: []\n  hub:\n    - {apiVersion: v1, kind: ConfigMap, metadata: {namespace: ns-a}}\n    - x\n",
+			[]string{
+				"fixture.yaml: spec.hub[0]: missing metadata.name",
+				"fixture.yaml: spec.hub[1]: must be a mapping",
+			},
 		},
 	}
 
