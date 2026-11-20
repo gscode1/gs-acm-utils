@@ -226,6 +226,8 @@ ConfigMap, Secret or Namespace), `params key "env" must be an exported identifie
 `mock data: no objects found under <cohort>/objects/`
 *Fix:* check `--mock-data-dir` points at the cohort root (the directory *containing* `objects/`) and that
 `objects/` has files. A cohort that does not exist reads `mock data: cohort directory <dir>: does not exist`.
+For a `--mock-data-file` the message is
+`mock data: <file>: spec: no objects found: neither spec.managed nor spec.hub contains objects`.
 
 ### Resolve-time (exit 1)
 
@@ -339,7 +341,10 @@ acm-mock-resolver resolve --mock-data-file fixture.yaml --params extra.yaml poli
 3. Scope: a known namespaced Kind needs `metadata.namespace`; a known cluster-scoped Kind must not have it.
    For an unknown Kind the first object of that Kind in the list sets the scope (namespaced when
    `metadata.namespace` is set) and the rest must agree.
-4. `spec.managed` absent or an empty list is an error (the equivalent of E15). `spec.hub` present, even as
+4. At least one of `spec.managed` and `spec.hub` must hold an object, else E15. A hub-only file is valid:
+   `spec.managed` may be absent, `null` or `[]` when `spec.hub` has objects (managed `{{ }}` lookups then
+   fail with the usual E1/E2/E4; plain managed content passes through). A `spec.managed` or `spec.hub` that
+   is not a list is its own error, without an extra E15. `spec.hub` present, even as
    `[]` (a `null` value counts as absent), means hub data is present; absent means `--hub-mode=resolve`
    fails with E12 on a hub template, as for a cohort without `hub/objects/`.
 5. `spec.hubContext` and `spec.params` are free-form maps like `hub/context.yaml` and `params.yaml`: absent or

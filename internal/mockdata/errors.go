@@ -312,13 +312,13 @@ func (e *ErrEncryptionUnsupported) Error() string {
 // ErrEmptyCohort (E15): objects/ is missing or contains no files.
 type ErrEmptyCohort struct {
 	Cohort string
-	// Loc is set for a mock-data file whose spec.managed is absent or empty.
+	// Loc is set for a mock-data file whose spec.managed and spec.hub both hold no objects.
 	Loc *FileLoc
 }
 
 func (e *ErrEmptyCohort) Error() string {
 	if e.Loc != nil {
-		return e.Loc.wrap("no objects found")
+		return e.Loc.wrap("no objects found: neither spec.managed nor spec.hub contains objects")
 	}
 
 	return fmt.Sprintf("%sno objects found under %s/objects/", msgPrefix, e.Cohort)

@@ -191,7 +191,7 @@ kind: MockData
 metadata:
   name: basic
 spec:
-  managed:                  # required, non-empty: the managed-cluster view ({{ ... }})
+  managed:                  # non-empty unless hub has objects: the managed-cluster view ({{ ... }})
     - apiVersion: v1
       kind: ConfigMap
       metadata: {name: my-config, namespace: ns-a}

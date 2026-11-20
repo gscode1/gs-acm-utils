@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -642,5 +643,57 @@ spec:
 		if !strings.Contains(msg, want) {
 			t.Errorf("message lacks %q:\n%s", want, msg)
 		}
+	}
+}
+
+// A hub-only MockData file (empty managed view) resolves hub templates, passes
+// plain managed content through, and fails strictly on managed lookups.
+func TestHubOnlyFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hub-only.yaml")
+	data := `apiVersion: acm-utils.gskode.com/v1alpha1
+kind: MockData
+spec:
+  hub:
+    - apiVersion: cluster.open-cluster-management.io/v1
+      kind: ManagedCluster
+      metadata: {name: c1, labels: {env: prod}}
+    - apiVersion: v1
+      kind: ConfigMap
+      metadata: {name: hc, namespace: policies}
+      data: {k: hub-value}
+  hubContext: {clusterName: c1}
+`
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	set, err := mockdata.LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e := newEngine(t, set, true)
+	opts := DocOptions{HubNamespace: "policies"}
+	doc := func(v string) []byte {
+		return []byte("apiVersion: policy.open-cluster-management.io/v1\nkind: ConfigurationPolicy\nspec:\n  object-templates:\n    - objectDefinition:\n        plain: keep\n        v: '" + v + "'\n")
+	}
+
+	out, err := e.ResolveDocument(doc(`{{hub fromConfigMap "policies" "hc" "k" hub}}-{{hub .ManagedClusterLabels.env hub}}`), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sameYAML(t, out, `apiVersion: policy.open-cluster-management.io/v1
+kind: ConfigurationPolicy
+spec:
+  object-templates:
+    - objectDefinition: {plain: keep, v: hub-value-prod}
+`)
+
+	_, err = e.ResolveDocument(doc(`{{ fromConfigMap "ns-a" "mc" "k" }}`), opts)
+
+	var e1 *mockdata.ErrNamespaceDirMissing
+	if !errors.As(err, &e1) {
+		t.Fatalf("want a typed namespace-missing error, got %v", err)
 	}
 }
